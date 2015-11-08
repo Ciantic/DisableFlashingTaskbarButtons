@@ -11,10 +11,11 @@ TestedVersions := "This patch has been tested with Windows 10, 64bit builds: 102
 
 if (processName != "explorer") {
     if (not FileExist("AutoHotkey.dll")) or (not FileExist("RemoteThreader.exe")) {
-        MsgBox % "Unable to execute, following dependencies are missing:`n`n"
-            . " - AutoHotkey.dll found at : https://github.com/hotKeyIt/ahkdll-v1-release/ (file x64w/AutoHotkey.dll)`n"
-            . " - RemoteThreader.exe found at : https://github.com/Ciantic/RemoteThreader (file x64/Release/RemoteThreader.exe)`n"
-            . "Place them in same directory as this script"
+        MsgBox % "Unable to execute, one or more of the following dependencies are missing:`n`n"
+            . " - AutoHotkey.dll get from`nhttps://github.com/hotKeyIt/ahkdll-v1-release/ (file x64w/AutoHotkey.dll)`n`n"
+            . " - VS 2015 C++ runtimes at`nhttps://www.microsoft.com/en-us/download/details.aspx?id=48145`n`n"
+            . " - RemoteThreader.exe found at`nhttps://github.com/Ciantic/RemoteThreader (file x64/Release/RemoteThreader.exe)`n`n"
+            . "Place AutoHotkey.dll and RemoteThreader.exe in same directory as this script, install VS 2015 C++ runtimes"
         ExitApp
     }
     ; Running outside the explorer
@@ -186,14 +187,14 @@ jmpUpwards := HexStringToBufferObject(JmpAsm(-11 - 6)) ; Replaces "push r14" (41
 
 patch := HexStringToBufferObject("" 
   . "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 " ; 15 bytes before the patch oughta be enough
-  . "90 90 90 90 90 90 " 	; 6 x nop (saturates the zeroed area even if it hits second byte)
+  . "90 90 90 90 90 90 "    ; 6 x nop (saturates the zeroed area even if it hits second byte)
   . "49 81 F8 06 80 00 00 " ; cmp r8, 0x8006 (HSHELL_FLASH)
-  . "75 0C " 				; jne +12 bytes
+  . "75 0C "                ; jne +12 bytes
   . "48 81 FA 2B C0 00 00 " ; cmp rdx, 0xC02B (SHELLHOOK)
   . "75 03 "                ; jne +3 bytes
   . "48 31 D2 "             ; xor rdx, rdx
   . "41 56 "                ; push r14
-  . "XX XX XX XX XX "		; jmp to Continue Addr (replaced later)
+  . "XX XX XX XX XX "       ; jmp to Continue Addr (replaced later)
   . "00 00 00 00 00 00 00 00 00 00 00 00"
   . "")
    
