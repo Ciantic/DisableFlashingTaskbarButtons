@@ -12,7 +12,9 @@ Dependencies:
 * AutoHotkey.dll found at : https://github.com/hotKeyIt/ahkdll-v1-release/ (file x64w/AutoHotkey.dll)
 * RemoteThreader.exe found at : https://github.com/Ciantic/RemoteThreader (file x64/Release/RemoteThreader.exe)
 
-Place AutoHotkey.dll and RemoteThreader.exe in the same directory as the command.
+Place AutoHotkey.dll and RemoteThreader.exe in the same directory as this script.
+
+You can try if it worked using TestFlashingWindow.ahk, it just creates a window which flashes continuously.
 
 
 Notes
