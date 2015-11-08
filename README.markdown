@@ -10,6 +10,7 @@ Dependencies:
 
 * AutoHotkey (v1) of course to run the script
 * AutoHotkey.dll found at : https://github.com/hotKeyIt/ahkdll-v1-release/ (file x64w/AutoHotkey.dll)
+* VS 2015 C++ runtimes at : https://www.microsoft.com/en-us/download/details.aspx?id=48145
 * RemoteThreader.exe found at : https://github.com/Ciantic/RemoteThreader (file x64/Release/RemoteThreader.exe)
 
 Place AutoHotkey.dll and RemoteThreader.exe in the same directory as this script.
