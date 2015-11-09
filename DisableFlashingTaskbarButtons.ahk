@@ -35,15 +35,19 @@ LogFile.Write(TestedVersions . "`r`n`r`n")
 
 virtualProtect(ptrAddress, size, protection:=0x40) { 
     ; 0x40 = PAGE_EXECUTE_READWRITE
-    return DllCall("kernel32\VirtualProtect", Ptr, ptrAddress, UPtr, size, UInt, protection, Int)
+    return DllCall("kernel32\VirtualProtect", "UPtr", ptrAddress + 0, "Ptr", size, "Ptr", protection, "Ptr")
 }
 
 memcpy(ptrAddress, ptrFrom, size) {
-    return DllCall("msvcrt\memcpy_s", "Ptr", ptrAddress, "Int", size, "Ptr", ptrFrom, "Int", size, "Int")
+    return DllCall("msvcrt\memcpy_s", "UPtr", ptrAddress + 0, "Int", size, "UPtr", ptrFrom, "Int", size, "Int")
+}
+
+memcmp(ptrAddress, ptrFrom, size) {
+    return DllCall("msvcrt\memcmp", "Ptr", ptrAddress, "Ptr", ptrFrom, "Int", size, "Int")
 }
 
 memset(ptrAddress, val, n:=1) {
-    return DllCall("msvcrt\memset", "Ptr", ptrAddress, "Int", val, "UInt", n, "Ptr")
+    return DllCall("msvcrt\memset", "Ptr", ptrAddress + 0, "Int", val, "UInt", n, "Ptr")
 }
 
 StrPad(Str, PadChar, PadLen, Left=1) { 
@@ -198,16 +202,30 @@ patch := HexStringToBufferObject(""
   . "XX XX XX XX XX "       ; jmp to Continue Addr (replaced later)
   . "00 00 00 00 00 00 00 00 00 00 00 00"
   . "")
+
+patchCmp := HexStringToBufferObject(SubStr(patch.str, 1, 44 * 3)) ; Until XX (44th byte)
    
 emptyBeginAddr := taskSwitcherWndProcAddr
 emptyBuffer := HexStringToBufferObject("00", patch.size)
-Loop, 1615 {
-    emptyBeginAddr += 512
-    readBuffer := GetBufferObjectFrom(emptyBeginAddr, emptyBuffer.size)
-    if (emptyBuffer.str = readBuffer.str) or (readBuffer.str = patch.str) {
-        break
+foundEmptyArea := false
+loopCount := Floor(1855487 / patch.size)
+Loop, %loopCount% {
+    emptyBeginAddr += patch.size
+    if (memcmp(emptyBeginAddr, emptyBuffer.ptr, emptyBuffer.size) = 0) or (memcmp(emptyBeginAddr, patchCmp.ptr, patchCmp.size) = 0) {
+        LogFile.Write("Found empty spot at " . Dec2Hex(emptyBeginAddr) . "`r`n")
+        foundEmptyArea := true
+        Break
     }
 }
+
+LogFile.Write("Patch size: " . patch.size . "`r`n")
+
+if (!foundEmptyArea) {
+    LogFile.Write("Can't find empty area for the patch :(")
+    ExitApp
+}
+
+LogFile.__Handle ; Force flushes the file writes
 
 ; Calculate the jmp to the begin of patch (15 x 0, 6 x nop in the patch)
 patchBeginAddr := emptyBeginAddr + 15 + 6
@@ -218,11 +236,14 @@ jmpContinueOffset := jmpContinueAddr - patchEndAddr
 jmpContinue := HexStringToBufferObject(JmpAsm(jmpContinueOffset))
 patch := HexStringToBufferObject(StrReplace(patch.str, "XX XX XX XX XX", jmpContinue.str))
 
-virtualProtect(expectedBufferAddr, 1599709 * 2)
-memcpy(emptyBeginAddr, patch.ptr, patch.size)
+LogFile.Write("Modified WndProc at: 0x" . Dec2Hex(taskSwitcherWndProcAddr) . "`r`n")
+LogFile.Write("Patch at: 0x" . Dec2Hex(patchBeginAddr) . "`r`n")
+
+prot := virtualProtect(jmpDownwardsAddr, patchBeginAddr + patch.size - jmpDownwardsAddr)
 memcpy(jmpDownwardsAddr, jmpDownwards.ptr, jmpDownwards.size)
+memcpy(emptyBeginAddr, patch.ptr, patch.size)
 memcpy(jmpUpwardsAddr, jmpUpwards.ptr, jmpUpwards.size)
-LogFile.Write("WndProc: 0x" . Dec2Hex(taskSwitcherWndProcAddr) . "`r`n")
-LogFile.Write("Patch detour at: 0x" . Dec2Hex(patchBeginAddr) . "`r`n")
+virtualProtect(jmpDownwardsAddr, patchBeginAddr + patch.size - jmpDownwardsAddr, prot)
+
 LogFile.Write("Patch done!")
 ExitApp
