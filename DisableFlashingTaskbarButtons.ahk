@@ -88,9 +88,9 @@ HexStringToBufferObject(str, repeat := 1) {
     Loop, % repeat - 1  {
         str .= " " . originalStr
     }
-    hexString := str
+    hexString := Trim(str)
     StringUpper, hexString, hexString
-    bytes := StrSplit(str, " ")
+    bytes := StrSplit(hexString, " ")
     res := { "str" : hexString, "buffer" : "", "ptr" : "", "size" : bytes.MaxIndex() }
     res.SetCapacity("buffer", bytes.MaxIndex() + 2)
     res.ptr := res.GetAddress("buffer")
