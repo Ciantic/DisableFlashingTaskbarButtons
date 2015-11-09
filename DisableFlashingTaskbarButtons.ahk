@@ -2,6 +2,7 @@
 ; 
 ; Jari Pennanen, 2015
 ; MIT License
+#ErrorStdOut
 
 nSize := VarSetCapacity(processPath, 512, 0)
 DllCall("GetModuleFileName", "Ptr", 0, "Ptr", &processPath, "UInt", nSize)
