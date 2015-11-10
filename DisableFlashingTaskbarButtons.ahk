@@ -239,11 +239,11 @@ patch := HexStringToBufferObject(StrReplace(patch.str, "XX XX XX XX XX", jmpCont
 LogFile.Write("Modified WndProc at: 0x" . Dec2Hex(taskSwitcherWndProcAddr) . "`r`n")
 LogFile.Write("Patch at: 0x" . Dec2Hex(patchBeginAddr) . "`r`n")
 
-prot := virtualProtect(jmpDownwardsAddr, patchBeginAddr + patch.size - jmpDownwardsAddr)
+prot := virtualProtect(jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr)
 memcpy(jmpDownwardsAddr, jmpDownwards.ptr, jmpDownwards.size)
 memcpy(emptyBeginAddr, patch.ptr, patch.size)
 memcpy(jmpUpwardsAddr, jmpUpwards.ptr, jmpUpwards.size)
-virtualProtect(jmpDownwardsAddr, patchBeginAddr + patch.size - jmpDownwardsAddr, prot)
+virtualProtect(jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr, prot)
 
 LogFile.Write("Patch done!")
 ExitApp
