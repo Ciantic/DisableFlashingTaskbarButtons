@@ -1,12 +1,17 @@
 ; In-memory patches running explorer.exe to disable flashing taskbar buttons
 ; This patch has been tested with Windows 10, 64bit builds: 10240, 10565
 ; 
+; Run with -NoMsgBox command line parameter to disable completion messagebox
+; It will still show message box if error occurs
+; 
 ; Jari Pennanen, 2015
 ; MIT License
 ; Source Code at https://github.com/Ciantic/DisableFlashingTaskbarButtons
 
 Process,Exist,explorer.exe
 explorerPid := ErrorLevel
+
+note := "You have to restart explorer.exe to cancel the patch."
 
 if (!explorerPid) {
     MsgBox % "Explorer is not running, unable to patch"
@@ -215,12 +220,16 @@ NumPut(taskSwitcherHwnd, params, 0, "UPtr")
 NumPut(-4, params, 8, "Int")
 paramsAddr := WriteProcessMemoryEmpty(hProcess, &params, paramsSize)
 if (!paramsAddr) {
+    FreeProcessMemory(hProcess, funcAddr, GetWindowLongPtrFunc.size)
+    FreeProcessMemory(hProcess, paramsAddr, paramsSize)
     MsgBox % "Could not allocate or write parameters to process memory"
     ExitApp
 }
 
 hThread := DllCall("CreateRemoteThread", "Ptr", hProcess, "Int", 0, "Int", 0, "Ptr", funcAddr, "Ptr", paramsAddr, "Int", 0, "Int", 0, "Ptr") 
 if (!hThread) {
+    FreeProcessMemory(hProcess, funcAddr, GetWindowLongPtrFunc.size)
+    FreeProcessMemory(hProcess, paramsAddr, paramsSize)
     MsgBox % "Could not create remote thread"
     ExitApp
 }
@@ -248,9 +257,15 @@ expectedBufferAddr := taskSwitcherWndProcAddr - 7
 expectedBuffer := HexStringToBufferObject("CC CC CC CC CC CC CC 48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57")
 ReadProcessMemoryToBuffer(actualBuffer, hProcess, expectedBufferAddr, expectedBuffer.size)
 if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
-    MsgBox % "Task Switcher WinProc does not match:`r`n"
-        . ReadBufferObjectFrom(&actualBuffer, expectedBuffer.size).str
-        . "`r`n`r`nHave you run the patch already?"
+    actualBufferHex := ReadBufferObjectFrom(&actualBuffer, expectedBuffer.size)
+    if (RegExMatch(actualBufferHex.str, "CC .. .. .. .. .. CC")) {
+        if (%0% != "-NoMsgBox") {
+            MsgBox % "Explorer.exe is already patched. " note
+        }
+    } else {
+        MsgBox % "Task Switcher WinProc does not match:`r`n"
+            . actualBufferHex.str
+    }
     ExitApp
 }
 
@@ -310,4 +325,8 @@ OverwriteProcessMemory(hProcess, jmpUpwardsAddr, jmpUpwards.ptr, jmpUpwards.size
 VirtualProtectEx(hProcess, jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr, prot)
 
 DllCall("CloseHandle", "Ptr", hProcess , "Int")
+
+if (%0% != "-NoMsgBox") {
+    MsgBox % "Explorer.exe is now patched." note
+}
 ExitApp
