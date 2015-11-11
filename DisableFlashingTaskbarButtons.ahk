@@ -1,42 +1,19 @@
 ; In-memory patches running explorer.exe to disable flashing taskbar buttons
+; This patch has been tested with Windows 10, 64bit builds: 10240, 10565
 ; 
 ; Jari Pennanen, 2015
 ; MIT License
-#ErrorStdOut
+; Source Code at https://github.com/Ciantic/DisableFlashingTaskbarButtons
 
-nSize := VarSetCapacity(processPath, 512, 0)
-DllCall("GetModuleFileName", "Ptr", 0, "Ptr", &processPath, "UInt", nSize)
-SplitPath, processPath,,,,processName, 
+Process,Exist,explorer.exe
+explorerPid := ErrorLevel
 
-TestedVersions := "This patch has been tested with Windows 10, 64bit builds: 10240, 10565"
-
-if (processName != "explorer") {
-    if (not FileExist("AutoHotkey.dll")) or (not FileExist("RemoteThreader.exe")) {
-        MsgBox % "Unable to execute, one or more of the following dependencies are missing:`n`n"
-            . " - AutoHotkey.dll get from`nhttps://github.com/hotKeyIt/ahkdll-v1-release/ (file x64w/AutoHotkey.dll)`n`n"
-            . " - VS 2015 C++ runtimes at`nhttps://www.microsoft.com/en-us/download/details.aspx?id=48145`n`n"
-            . " - RemoteThreader.exe found at`nhttps://github.com/Ciantic/RemoteThreader (file x64/Release/RemoteThreader.exe)`n`n"
-            . "Place AutoHotkey.dll and RemoteThreader.exe in same directory as this script, install VS 2015 C++ runtimes"
-        ExitApp
-    }
-    ; Running outside the explorer
-    Run, RemoteThreader.exe explorer.exe AutoHotkey.dll ahktextdll "#include %A_ScriptFullPath%", , Hide
-    sleep, 1500
-    Run, RemoteThreader.exe explorer.exe AutoHotkey.dll ahkterminate, , Hide
-    sleep, 300
-    Run, RemoteThreader.exe explorer.exe AutoHotkey.dll, , Hide
-    FileRead, Message, % A_ScriptDir . "\commands.log"
-    MsgBox % Message
+if (!explorerPid) {
+    MsgBox % "Explorer is not running, unable to patch"
     ExitApp
 }
 
-LogFile := FileOpen(A_ScriptDir . "\commands.log", "w")
-LogFile.Write(TestedVersions . "`r`n`r`n")
-
-virtualProtect(ptrAddress, size, protection:=0x40) { 
-    ; 0x40 = PAGE_EXECUTE_READWRITE
-    return DllCall("kernel32\VirtualProtect", "UPtr", ptrAddress + 0, "Ptr", size, "Ptr", protection, "Ptr")
-}
+user32 := DllCall("LoadLibrary", "Str", "user32", "Ptr")
 
 memcpy(ptrAddress, ptrFrom, size) {
     return DllCall("msvcrt\memcpy_s", "UPtr", ptrAddress + 0, "Int", size, "UPtr", ptrFrom, "Int", size, "Int")
@@ -46,8 +23,37 @@ memcmp(ptrAddress, ptrFrom, size) {
     return DllCall("msvcrt\memcmp", "Ptr", ptrAddress, "Ptr", ptrFrom, "Int", size, "Int")
 }
 
-memset(ptrAddress, val, n:=1) {
-    return DllCall("msvcrt\memset", "Ptr", ptrAddress + 0, "Int", val, "UInt", n, "Ptr")
+VirtualProtectEx(hProcess, lpAddress, dwSize, flNewProtect:=0x40) {
+    VarSetCapacity(oldProtect, 8, 0)
+    DllCall("VirtualProtectEx", "Ptr", hProcess, "Ptr", lpAddress, "UInt", dwSize, "UInt", flNewProtect, "Ptr", &oldProtect, "Int")
+    return NumGet(oldProtect, 0, "UInt")
+}
+
+ReadProcessMemoryToBuffer(ByRef toBuffer, hProcess, remoteAddress, bufferSize) {
+    VarSetCapacity(toBuffer, bufferSize, 0)
+    VarSetCapacity(bytesRead, 8, 0)
+    DllCall("ReadProcessMemory", "Ptr", hProcess, "Ptr", remoteAddress, "Ptr", &toBuffer, "UInt", bufferSize, "Ptr", &bytesRead, "Int")
+    return NumGet(bytesRead, 0, "UInt")
+}
+
+OverwriteProcessMemory(hProcess, remoteAddress, localAddress, bufferSize) {
+    VarSetCapacity(bytes, 8, 0)
+    DllCall("WriteProcessMemory", "Ptr", hProcess, "Ptr", remoteAddress, "Ptr", localAddress, "UInt", bufferSize, "Ptr", &bytes, "Int")
+    return NumGet(bytes, 0, "UInt")
+}
+
+WriteProcessMemoryEmpty(hProcess, localAddress, bufferSize) {
+    remoteAddress := DllCall("VirtualAllocEx", "Ptr", hProcess, "Int", 0, "UInt", bufferSize, "Int", 0x1000, "Int", 0x40, "Ptr")
+    VarSetCapacity(bytes, 8, 0)
+    DllCall("WriteProcessMemory", "Ptr", hProcess, "Ptr", remoteAddress, "Ptr", localAddress, "UInt", bufferSize, "Ptr", &bytes, "Int")
+    if (NumGet(bytes, 0, "UInt") != bufferSize) {
+        return 0
+    }
+    return remoteAddress
+}
+
+FreeProcessMemory(hProcess, remoteAddress, size) {
+    return DllCall("VirtualFreeEx", "Ptr", hProcess, "Ptr", remoteAddress, "UInt", size, "Int", 0x8000, "Int")
 }
 
 StrPad(Str, PadChar, PadLen, Left=1) { 
@@ -88,7 +94,7 @@ HexStringToBufferObject(str, repeat := 1) {
     Loop, % repeat - 1  {
         str .= " " . originalStr
     }
-    hexString := Trim(str)
+    hexString := Trim(RegExReplace(str, "\s+", " "))
     StringUpper, hexString, hexString
     bytes := StrSplit(hexString, " ")
     res := { "str" : hexString, "buffer" : "", "ptr" : "", "size" : bytes.MaxIndex() }
@@ -99,8 +105,8 @@ HexStringToBufferObject(str, repeat := 1) {
     }
     return res
 }
- 
-GetBufferObjectFrom(ptrAddress, bufferSize) {
+
+ReadBufferObjectFrom(ptrAddress, bufferSize) {
     hexString := ""
     res := { "str" : "", "buffer" : "", "ptr" : "", "size" : bufferSize }
     res.SetCapacity("buffer", bufferSize)
@@ -117,13 +123,11 @@ GetBufferObjectFrom(ptrAddress, bufferSize) {
     return res
 }
 
-; 2 or 5 byte relative jump
-JmpAsm(decimalOffset) {
-    jumpBytes := Abs(decimalOffset) > 127 ? 4 : 1
-    decimalOffset -= jumpBytes + 1
+; Turns decimal to assembly hexes (reversed)
+Dec2Asm(decimal, byteLen) {
     result := ""
-    hexes := SubStr(Dec2Hex(decimalOffset), - jumpBytes * 2)
-    hexes := StrPad(hexes, "0", jumpBytes * 2, 1)
+    hexes := SubStr(Dec2Hex(decimal), - byteLen * 2)
+    hexes := StrPad(hexes, "0", byteLen * 2, 1)
     index := Floor(StrLen(hexes) / 2)
     ; Reverse bytes
     Loop % index {
@@ -131,8 +135,16 @@ JmpAsm(decimalOffset) {
         if (A_Index != index)
             result .= " "
     }
-    return (jumpBytes = 4 ? "E9 " : "EB ") . result
+    return result
 }
+
+; 2 or 5 byte relative jump
+JmpAsm(decimalOffset) {
+    jumpBytes := Abs(decimalOffset) > 127 ? 4 : 1
+    decimalOffset -= jumpBytes + 1
+    return (jumpBytes = 4 ? "E9 " : "EB ") . Dec2Asm(decimalOffset, jumpBytes)
+}
+
 ; Tested against x64dbg with values:
 ;~ MsgBox % "JMP:"
     ;~ . "`n(+1603214) E9 89 76 18 00 = " . JmpAsm(0x00007FF73DD00F04 - 0x00007FF73DB79876) . ""
@@ -145,7 +157,7 @@ JmpAsm(decimalOffset) {
 shellTrayHwnd := DllCall("FindWindow", Str, "Shell_TrayWnd", Int, 0)
 
 if (shellTrayHwnd = 0) {
-    LogFile.Write("Shell Tray window not found")
+    MsgBox % "Shell Tray window not found"
     ExitApp
 }
 
@@ -162,25 +174,83 @@ EnumChildWindowsCallback(Hwnd, lParam) {
 DllCall("EnumChildWindows", UInt, shellTrayHwnd, UInt, RegisterCallback("EnumChildWindowsCallback", "Fast"), UInt, 0)
 
 if (taskSwitcherHwnd = 0) {
-    LogFile.Write("Task Switcher not found")
+    MsgBox % "Task Switcher not found"
     ExitApp
 }
 
-; Get task switcher WndProc
-taskSwitcherWndProcAddr := DllCall("user32\GetWindowLongPtrW", Ptr, taskSwitcherHwnd, Int, -4, Ptr)
+getWindowLongPtrWAddr := DllCall("GetProcAddress", "Ptr", user32, "AStr", "GetWindowLongPtrW", "Ptr")
+if (!getWindowLongPtrWAddr) {
+    MsgBox % "Unable to retrieve GetWindowLongPtrW address"
+    ExitApp
+}
+
+hProcess := DllCall("OpenProcess", "UInt", 0x001F0FFF, "Int", 0, "UInt", explorerPid, "Ptr")
+
+GetWindowLongPtrFuncAsm := Dec2Asm(getWindowLongPtrWAddr, 8)
+GetWindowLongPtrFunc := HexStringToBufferObject(""
+    . " 40 53"                            ; push        rbx
+    . " 48 83 EC 20"                      ; sub         rsp,20h
+    . " 8B 51 08"                         ; mov         edx,dword ptr [rcx+8]
+    . " 48 8B D9"                         ; mov         rbx,rcx
+    . " 48 8B 09"                         ; mov         rcx,qword ptr [rcx]
+    . " 48 B8 " . GetWindowLongPtrFuncAsm ; movabs rax, [GetWindowLongPtrW]
+    . " FF D0"                            ; call rax
+    . " 48 89 43 10"                      ; mov         qword ptr [rbx+10h],rax
+    . " 48 83 C4 20"                      ; add         rsp,20h
+    . " 5B"                               ; pop         rbx
+    . " C3"                               ; ret
+    . " CC"                               ; alignment?
+    . "")
+
+
+funcAddr := WriteProcessMemoryEmpty(hProcess, GetWindowLongPtrFunc.ptr, GetWindowLongPtrFunc.size)
+if (!funcAddr) {
+    MsgBox % "Could not allocate or write a function to process memory"
+    ExitApp
+}
+
+paramsSize := 24
+VarSetCapacity(params, paramsSize, 0)
+NumPut(taskSwitcherHwnd, params, 0, "UPtr")
+NumPut(-4, params, 8, "Int")
+paramsAddr := WriteProcessMemoryEmpty(hProcess, &params, paramsSize)
+if (!paramsAddr) {
+    MsgBox % "Could not allocate or write parameters to process memory"
+    ExitApp
+}
+
+hThread := DllCall("CreateRemoteThread", "Ptr", hProcess, "Int", 0, "Int", 0, "Ptr", funcAddr, "Ptr", paramsAddr, "Int", 0, "Int", 0, "Ptr") 
+if (!hThread) {
+    MsgBox % "Could not create remote thread"
+    ExitApp
+}
+
+DllCall("WaitForSingleObject", "Ptr", hThread, "UInt", 0xFFFFFFFF)
+
+; EXIT CODE:
+;~ VarSetCapacity(exitCode, 8, 0)
+;~ DllCall("GetExitCodeThread", "Ptr", hThread, "UPtr", &exitCode, "UInt")
+;~ MsgBox % "Thread: " . hThread . " res " . exitRes . " code " . ReadBufferObjectFrom(&exitCode, 8).str
+
+; Read WndProc address from the params
+ReadProcessMemoryToBuffer(paramsOut, hProcess, paramsAddr, paramsSize)
+taskSwitcherWndProcAddr := NumGet(paramsOut, 16, "Ptr")
+
+FreeProcessMemory(hProcess, funcAddr, GetWindowLongPtrFunc.size)
+FreeProcessMemory(hProcess, paramsAddr, paramsSize)
 
 if (taskSwitcherWndProcAddr == 0) {
-    LogFile.Write("Task Switcher WinProc not found")
+    MsgBox % "Task Switcher WinProc not found"
     ExitApp
 }
 
 expectedBufferAddr := taskSwitcherWndProcAddr - 7
 expectedBuffer := HexStringToBufferObject("CC CC CC CC CC CC CC 48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57")
-actualBuffer := GetBufferObjectFrom(expectedBufferAddr, expectedBuffer.size)
-if (actualBuffer.str != expectedBuffer.str) {
-    LogFile.Write("Task Switcher WinProc does not match:`r`n"
-        . actualBuffer.str
-        . "`r`n`r`nHave you run the patch already?")
+ReadProcessMemoryToBuffer(actualBuffer, hProcess, expectedBufferAddr, expectedBuffer.size)
+if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
+    MsgBox % "Task Switcher WinProc does not match:`r`n"
+        . ReadBufferObjectFrom(&actualBuffer, expectedBuffer.size).str
+        . "`r`n`r`nHave you run the patch already?"
     ExitApp
 }
 
@@ -203,29 +273,26 @@ patch := HexStringToBufferObject(""
   . "00 00 00 00 00 00 00 00 00 00 00 00"
   . "")
 
-patchCmp := HexStringToBufferObject(SubStr(patch.str, 1, 44 * 3)) ; Until XX (44th byte)
-   
 emptyBeginAddr := taskSwitcherWndProcAddr
-emptyBuffer := HexStringToBufferObject("00", patch.size)
+patchCmp := HexStringToBufferObject(SubStr(patch.str, 1, 44 * 3)) ; Until XX (44th byte)
+VarSetCapacity(localTempBuffer, patchCmp.size, 0)
+VarSetCapacity(emptyBuffer, patch.size, 0)
+
 foundEmptyArea := false
 loopCount := Floor(1855487 / patch.size)
 Loop, %loopCount% {
     emptyBeginAddr += patch.size
-    if (memcmp(emptyBeginAddr, emptyBuffer.ptr, emptyBuffer.size) = 0) or (memcmp(emptyBeginAddr, patchCmp.ptr, patchCmp.size) = 0) {
-        LogFile.Write("Found empty spot at " . Dec2Hex(emptyBeginAddr) . "`r`n")
+    ReadProcessMemoryToBuffer(localTempBuffer, hProcess, emptyBeginAddr, patch.size)
+    if (memcmp(&localTempBuffer, &emptyBuffer, patch.size) = 0) or (memcmp(&localTempBuffer, patchCmp.ptr, patchCmp.size) = 0) {
         foundEmptyArea := true
         Break
     }
 }
 
-LogFile.Write("Patch size: " . patch.size . "`r`n")
-
 if (!foundEmptyArea) {
-    LogFile.Write("Can't find empty area for the patch :(")
+    MsgBox % "Can't find empty area for the patch :("
     ExitApp
 }
-
-LogFile.__Handle ; Force flushes the file writes
 
 ; Calculate the jmp to the begin of patch (15 x 0, 6 x nop in the patch)
 patchBeginAddr := emptyBeginAddr + 15 + 6
@@ -236,14 +303,11 @@ jmpContinueOffset := jmpContinueAddr - patchEndAddr
 jmpContinue := HexStringToBufferObject(JmpAsm(jmpContinueOffset))
 patch := HexStringToBufferObject(StrReplace(patch.str, "XX XX XX XX XX", jmpContinue.str))
 
-LogFile.Write("Modified WndProc at: 0x" . Dec2Hex(taskSwitcherWndProcAddr) . "`r`n")
-LogFile.Write("Patch at: 0x" . Dec2Hex(patchBeginAddr) . "`r`n")
+prot := VirtualProtectEx(hProcess, jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr)
+OverwriteProcessMemory(hProcess, jmpDownwardsAddr, jmpDownwards.ptr, jmpDownwards.size)
+OverwriteProcessMemory(hProcess, emptyBeginAddr, patch.ptr, patch.size)
+OverwriteProcessMemory(hProcess, jmpUpwardsAddr, jmpUpwards.ptr, jmpUpwards.size)
+VirtualProtectEx(hProcess, jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr, prot)
 
-prot := virtualProtect(jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr)
-memcpy(jmpDownwardsAddr, jmpDownwards.ptr, jmpDownwards.size)
-memcpy(emptyBeginAddr, patch.ptr, patch.size)
-memcpy(jmpUpwardsAddr, jmpUpwards.ptr, jmpUpwards.size)
-virtualProtect(jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDownwardsAddr, prot)
-
-LogFile.Write("Patch done!")
+DllCall("CloseHandle", "Ptr", hProcess , "Int")
 ExitApp
