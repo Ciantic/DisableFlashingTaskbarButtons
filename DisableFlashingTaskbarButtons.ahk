@@ -327,6 +327,6 @@ VirtualProtectEx(hProcess, jmpDownwardsAddr, emptyBeginAddr + patch.size - jmpDo
 DllCall("CloseHandle", "Ptr", hProcess , "Int")
 
 if (%0% != "-NoMsgBox") {
-    MsgBox % "Explorer.exe is now patched." note
+    MsgBox % "Explorer.exe is now patched. " note
 }
 ExitApp
