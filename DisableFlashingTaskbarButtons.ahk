@@ -1,5 +1,5 @@
 ; In-memory patches running explorer.exe to disable flashing taskbar buttons
-; This patch has been tested with Windows 10, 64bit builds: 10240, 10565
+; This patch has been tested with Windows 10, 64bit builds: 10240, 10565, 10586
 ; 
 ; Run with -NoMsgBox command line parameter to disable completion messagebox
 ; It will still show message box if error occurs
