@@ -276,17 +276,7 @@ jmpDownwardsAddr := taskSwitcherWndProcAddr - 6
 jmpUpwardsAddr := taskSwitcherWndProcAddr + 11
 jmpContinueAddr := taskSwitcherWndProcAddr + 13 ; Next command after push r14
 jmpUpwards := HexStringToBufferObject(JmpAsm(-11 - 6)) ; Replaces "push r14" (41 56) in the WndProc
-/*
-00007FF73DD00102 | 49 81 F8 06 80 00 00     | cmp r8,8006                             |
-00007FF73DD00109 | 74 06                    | je explorer.7FF73DD00111                |
-00007FF73DD0010B | 49 83 F8 13              | cmp r8,13                               |
-00007FF73DD0010F | 75 0C                    | jne explorer.7FF73DD0011D               |
-00007FF73DD00111 | 48 81 FA 2B C0 00 00     | cmp rdx,C02B                            |
-00007FF73DD00118 | 75 03                    | jne explorer.7FF73DD0011D               |
-00007FF73DD0011A | 48 31 D2                 | xor rdx,rdx                             |
-00007FF73DD0011D | 41 56                    | push r14                                |
-00007FF73DD0011F | E9 69 97 E7 FF           | jmp explorer.7FF73DB7988D               |
-*/
+
 patch := HexStringToBufferObject("" 
   . "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 " ; 15 bytes before the patch oughta be enough
   . "90 90 90 90 90 90 "    ; 6 x nop (saturates the zeroed area even if it hits second byte)
