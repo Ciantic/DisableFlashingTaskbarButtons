@@ -260,7 +260,7 @@ expectedBuffer := HexStringToBufferObject("CC CC CC CC CC CC CC 48 89 5C 24 18 4
 ReadProcessMemoryToBuffer(actualBuffer, hProcess, expectedBufferAddr, expectedBuffer.size)
 if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
     actualBufferHex := ReadBufferObjectFrom(&actualBuffer, expectedBuffer.size)
-    if (RegExMatch(actualBufferHex.str, "CC .. .. .. .. .. CC")) {
+    if (RegExMatch(actualBufferHex.str, "CC E9 .. .. .. .. CC")) {
         if (%0% != "-NoMsgBox") {
             MsgBox % "Explorer.exe is already patched. " note
         }
@@ -281,7 +281,7 @@ patch := HexStringToBufferObject(""
   . "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 " ; 15 bytes before the patch oughta be enough
   . "90 90 90 90 90 90 "    ; 6 x nop (saturates the zeroed area even if it hits second byte)
   . "49 81 F8 06 80 00 00 " ; cmp r8, 0x8006  (0x8006 = HSHELL_FLASH)
-  . "74 06 "                ; je +6 bytes     (to cmp c023b)
+  . "74 06 "                ; je +6 bytes     (to cmp C02B)
   . "49 83 F8 13 "          ; cmp r8,0x13     (0x13 = HSHELL_WINDOWREPLACED)
   . "75 0C "                ; jne +12 bytes   (to push r14)
   . "48 81 FA 2B C0 00 00 " ; cmp rdx, 0xC02B (0xC02B = SHELLHOOK)
@@ -293,7 +293,7 @@ patch := HexStringToBufferObject(""
   . "")
 
 emptyBeginAddr := taskSwitcherWndProcAddr
-patchCmp := HexStringToBufferObject(SubStr(patch.str, 1, 44 * 3)) ; Until XX (44th byte)
+patchCmp := HexStringToBufferObject(SubStr(patch.str, 1, InStr(patch.str, "XX XX XX XX XX")))
 VarSetCapacity(localTempBuffer, patchCmp.size, 0)
 VarSetCapacity(emptyBuffer, patch.size, 0)
 
