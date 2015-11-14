@@ -1,8 +1,10 @@
-; In-memory patches running explorer.exe to disable flashing taskbar buttons
-; This patch has been tested with Windows 10, 64bit builds: 10240, 10565, 10586
+; Customizes explorer.exe by in-memory patching:
+; Command line parameters Arguments:
+; -NoFlashing       - Disable flashing taskbar buttons
+; -NoWindowReplace  - Disable desktop changing when window activates (does nothing)
+; -NoMsgBox         - Don't show message box on completion (only on errors)
 ; 
-; Run with -NoMsgBox command line parameter to disable completion messagebox
-; It will still show message box if error occurs
+; This patch has been tested with Windows 10, 64bit builds: 10240, 10565, 10586
 ; 
 ; Jari Pennanen, 2015
 ; MIT License
@@ -274,16 +276,28 @@ jmpDownwardsAddr := taskSwitcherWndProcAddr - 6
 jmpUpwardsAddr := taskSwitcherWndProcAddr + 11
 jmpContinueAddr := taskSwitcherWndProcAddr + 13 ; Next command after push r14
 jmpUpwards := HexStringToBufferObject(JmpAsm(-11 - 6)) ; Replaces "push r14" (41 56) in the WndProc
-
+/*
+00007FF73DD00102 | 49 81 F8 06 80 00 00     | cmp r8,8006                             |
+00007FF73DD00109 | 74 06                    | je explorer.7FF73DD00111                |
+00007FF73DD0010B | 49 83 F8 13              | cmp r8,13                               |
+00007FF73DD0010F | 75 0C                    | jne explorer.7FF73DD0011D               |
+00007FF73DD00111 | 48 81 FA 2B C0 00 00     | cmp rdx,C02B                            |
+00007FF73DD00118 | 75 03                    | jne explorer.7FF73DD0011D               |
+00007FF73DD0011A | 48 31 D2                 | xor rdx,rdx                             |
+00007FF73DD0011D | 41 56                    | push r14                                |
+00007FF73DD0011F | E9 69 97 E7 FF           | jmp explorer.7FF73DB7988D               |
+*/
 patch := HexStringToBufferObject("" 
   . "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 " ; 15 bytes before the patch oughta be enough
   . "90 90 90 90 90 90 "    ; 6 x nop (saturates the zeroed area even if it hits second byte)
-  . "49 81 F8 06 80 00 00 " ; cmp r8, 0x8006 (HSHELL_FLASH)
-  . "75 0C "                ; jne +12 bytes
-  . "48 81 FA 2B C0 00 00 " ; cmp rdx, 0xC02B (SHELLHOOK)
-  . "75 03 "                ; jne +3 bytes
-  . "48 31 D2 "             ; xor rdx, rdx
-  . "41 56 "                ; push r14
+  . "49 81 F8 06 80 00 00 " ; cmp r8, 0x8006  (0x8006 = HSHELL_FLASH)
+  . "74 06 "                ; je +6 bytes     (to cmp c023b)
+  . "49 83 F8 13 "          ; cmp r8,0x13     (0x13 = HSHELL_WINDOWREPLACED)
+  . "75 0C "                ; jne +12 bytes   (to push r14)
+  . "48 81 FA 2B C0 00 00 " ; cmp rdx, 0xC02B (0xC02B = SHELLHOOK)
+  . "75 03 "                ; jne +3 bytes    (to push r14)
+  . "48 31 D2 "             ; xor rdx, rdx    (empty message)
+  . "41 56 "                ; push r14        (resume)
   . "XX XX XX XX XX "       ; jmp to Continue Addr (replaced later)
   . "00 00 00 00 00 00 00 00 00 00 00 00"
   . "")
@@ -311,7 +325,7 @@ if (!foundEmptyArea) {
 
 ; Calculate the jmp to the begin of patch (15 x 0, 6 x nop in the patch)
 patchBeginAddr := emptyBeginAddr + 15 + 6
-patchEndAddr := patchBeginAddr + 23 ; XX XX XX XX XX
+patchEndAddr := emptyBeginAddr + (InStr(patch.str, "XX XX XX XX XX") / 3) ; XX XX XX XX XX
 patchBeginOffset := patchBeginAddr - jmpDownwardsAddr
 jmpDownwards := HexStringToBufferObject(JmpAsm(patchBeginOffset))
 jmpContinueOffset := jmpContinueAddr - patchEndAddr
