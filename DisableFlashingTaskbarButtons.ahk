@@ -1,13 +1,12 @@
 ; In-memory patches running explorer.exe to disable flashing taskbar buttons
-; This patch has been tested with Windows 10, 64bit build Windows 10 Anniversary 
-; edition, older versions must be get from version control
-; 
-; Run with -NoMsgBox command line parameter to disable completion messagebox
-; It will still show message box if error occurs
-; 
-; Jari Pennanen, 2015
-; MIT License
-; Source Code at https://github.com/Ciantic/DisableFlashingTaskbarButtons
+; This patch has been tested with Windows 10, 64bit build Windows 10 Creators
+; Update, older versions must be get from version control
+;
+; Run with -NoMsgBox command line parameter to disable completion messagebox It
+; will still show message box if error occurs
+;
+; Jari Pennanen, 2017 MIT License Source Code at
+; https://github.com/Ciantic/DisableFlashingTaskbarButtons
 
 Process,Exist,explorer.exe
 explorerPid := ErrorLevel
@@ -255,13 +254,13 @@ if (taskSwitcherWndProcAddr == 0) {
 }
 
 expectedBufferAddr := taskSwitcherWndProcAddr - 7
-expectedBuffer := HexStringToBufferObject("CC CC CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 18 56 57 41 56")
+expectedBuffer := HexStringToBufferObject("07 00 CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 18 56 57 41 56")
 ReadProcessMemoryToBuffer(actualBuffer, hProcess, expectedBufferAddr, expectedBuffer.size)
 if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
     actualBufferHex := ReadBufferObjectFrom(&actualBuffer, expectedBuffer.size)
-    if (RegExMatch(actualBufferHex.str, "CC .. .. .. .. .. CC")) {
+    if (RegExMatch(actualBufferHex.str, "07 00 E9")) {
         if (%0% != "-NoMsgBox") {
-            MsgBox % "Explorer.exe is already patched. " note
+            MsgBox % "Explorer.exe is already patched. " . note . "`r`nWndProc is now:`r`n" . actualBufferHex.str
         }
     } else {
         MsgBox % "Task Switcher WinProc does not match:`r`n"
@@ -271,10 +270,10 @@ if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
 }
 
 ; The patch for WndProc
-jmpDownwardsAddr := taskSwitcherWndProcAddr - 6
+jmpDownwardsAddr := taskSwitcherWndProcAddr - 5
 jmpUpwardsAddr := taskSwitcherWndProcAddr + 12
 jmpContinueAddr := taskSwitcherWndProcAddr + 14 ; Next command after push r14
-jmpUpwards := HexStringToBufferObject(JmpAsm(-12 - 6)) ; Replaces "push r14" (41 56) in the WndProc
+jmpUpwards := HexStringToBufferObject(JmpAsm(-12 - 5)) ; Replaces "push r14" (41 56) in the WndProc
 
 patch := HexStringToBufferObject("" 
   . "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 " ; 15 bytes before the patch oughta be enough
