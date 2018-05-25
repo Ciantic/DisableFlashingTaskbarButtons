@@ -14,7 +14,7 @@ Dependencies:
 
 You can try if it worked using TestFlashingWindow.ahk, it just creates a window which flashes continuously.
 
-Tested with Windows 10 Creators Update (April 2017 build).
+Tested with Windows 10 build 1803 (April 2018 build).
 
 Notes
 ---------
