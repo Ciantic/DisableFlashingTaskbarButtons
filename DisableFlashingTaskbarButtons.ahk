@@ -284,7 +284,7 @@ patch := HexStringToBufferObject(""
   . "90 90 90 90 90 90 "    ; 6 x nop (saturates the zeroed area even if it hits second byte)
   . "49 81 F8 06 80 00 00 " ; cmp r8, 0x8006 (HSHELL_FLASH)
   . "75 0C "                ; jne +12 bytes
-  . "48 81 FA 28 C0 00 00 " ; cmp rdx, 0xC02B (SHELLHOOK)
+  . "48 81 FA 28 C0 00 00 " ; cmp rdx, 0xC028 (SHELLHOOK)
   . "75 03 "                ; jne +3 bytes
   . "48 31 D2 "             ; xor rdx, rdx
   . "41 56 "                ; push r14
