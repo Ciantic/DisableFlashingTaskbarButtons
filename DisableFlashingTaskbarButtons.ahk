@@ -1,10 +1,10 @@
 ; In-memory patches running explorer.exe to disable flashing taskbar buttons
-; This patch has been tested with Windows 10 64bit build 1803 Update (2018-05)
+; This patch has been tested with Windows 10 64bit build 1809 Update (2018-11)
 ;
 ; Run with -NoMsgBox command line parameter to disable completion messagebox It
 ; will still show message box if error occurs
 ;
-; Jari Pennanen, 2017 MIT License Source Code at
+; Jari Pennanen, 2018 MIT License Source Code at
 ; https://github.com/Ciantic/DisableFlashingTaskbarButtons
 
 Process,Exist,explorer.exe
@@ -257,12 +257,13 @@ if (taskSwitcherWndProcAddr == 0) {
 ; ExitApp
 ; ; 7FF7C6585B00
 
+
 expectedBufferAddr := taskSwitcherWndProcAddr - 7
-expectedBuffer := HexStringToBufferObject("CC CC CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 18 56 57 41 56")
+expectedBuffer := HexStringToBufferObject("CC CC CC CC CC CC CC 48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56")
 ReadProcessMemoryToBuffer(actualBuffer, hProcess, expectedBufferAddr, expectedBuffer.size)
 if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
     actualBufferHex := ReadBufferObjectFrom(&actualBuffer, expectedBuffer.size)
-    if (RegExMatch(actualBufferHex.str, "CC CC E9 95 60")) {
+    if (RegExMatch(actualBufferHex.str, "CC CC E9")) {
         if (%0% != "-NoMsgBox") {
             MsgBox % "Explorer.exe is already patched. " . note . "`r`nWndProc is now:`r`n" . actualBufferHex.str
         }
@@ -275,9 +276,9 @@ if (memcmp(&actualBuffer, expectedBuffer.ptr, expectedBuffer.size) != 0) {
 
 ; The patch for WndProc
 jmpDownwardsAddr := taskSwitcherWndProcAddr - 5
-jmpUpwardsAddr := taskSwitcherWndProcAddr + 12
-jmpContinueAddr := taskSwitcherWndProcAddr + 14 ; Next command after push r14
-jmpUpwards := HexStringToBufferObject(JmpAsm(-12 - 5)) ; Replaces "push r14" (41 56) in the WndProc
+jmpUpwardsAddr := taskSwitcherWndProcAddr + 20
+jmpContinueAddr := taskSwitcherWndProcAddr + 22 ; Next command after push r14
+jmpUpwards := HexStringToBufferObject(JmpAsm(-20 - 5)) ; Replaces "push r14" (41 56) in the WndProc
 
 patch := HexStringToBufferObject("" 
   . "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 " ; 15 bytes before the patch oughta be enough

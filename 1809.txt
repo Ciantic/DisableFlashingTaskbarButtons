@@ -1,0 +1,27 @@
+00007FF6DA4AD3F0 | EB DE                    | jmp explorer.7FF6DA4AD3D0               |
+00007FF6DA4AD3F2 | CC                       | int3                                    |
+00007FF6DA4AD3F3 | CC                       | int3                                    |
+00007FF6DA4AD3F4 | CC                       | int3                                    |
+00007FF6DA4AD3F5 | CC                       | int3                                    |
+00007FF6DA4AD3F6 | CC                       | int3                                    |
+00007FF6DA4AD3F7 | CC                       | int3                                    |
+00007FF6DA4AD3F8 | CC                       | int3                                    |
+00007FF6DA4AD3F9 | CC                       | int3                                    |
+00007FF6DA4AD3FA | CC                       | int3                                    |
+00007FF6DA4AD3FB | CC                       | int3                                    |
+00007FF6DA4AD3FC | CC                       | int3                                    |
+00007FF6DA4AD3FD | CC                       | int3                                    |
+00007FF6DA4AD3FE | CC                       | int3                                    |
+00007FF6DA4AD3FF | CC                       | int3                                    |
+00007FF6DA4AD400 | 48:895C24 08             | mov qword ptr ss:[rsp+8],rbx            |
+00007FF6DA4AD405 | 48:896C24 10             | mov qword ptr ss:[rsp+10],rbp           |
+00007FF6DA4AD40A | 48:897424 18             | mov qword ptr ss:[rsp+18],rsi           |
+00007FF6DA4AD40F | 48:897C24 20             | mov qword ptr ss:[rsp+20],rdi           |
+00007FF6DA4AD414 | 41:56                    | push r14                                | <-- we replace that, with a jump to CC CC above.
+00007FF6DA4AD416 | 48:83EC 30               | sub rsp,30                              |
+00007FF6DA4AD41A | 4D:8BF1                  | mov r14,r9                              |
+00007FF6DA4AD41D | 49:8BE8                  | mov rbp,r8                              |
+00007FF6DA4AD420 | 8BFA                     | mov edi,edx                             |
+00007FF6DA4AD422 | 48:8BF1                  | mov rsi,rcx                             |
+00007FF6DA4AD425 | 81FA 81000000            | cmp edx,81                              |
+00007FF6DA4AD42B | 0F84 84000000            | je explorer.7FF6DA4AD4B5                |
