@@ -1,5 +1,5 @@
 ; In-memory patches running explorer.exe to disable flashing taskbar buttons
-; This patch has been tested with Windows 10 64bit version 1903 (18362.175, 1/2019)
+; This patch has been tested with Windows 10 64bit version 22H2 (19045.5011, 10/2024)
 ;
 ; Run with -NoMsgBox command line parameter to disable completion messagebox It
 ; will still show message box if error occurs
@@ -299,7 +299,7 @@ VarSetCapacity(localTempBuffer, patchCmp.size, 0)
 VarSetCapacity(emptyBuffer, patch.size, 0)
 
 foundEmptyArea := false
-loopCount := Floor(2855487 / patch.size)
+loopCount := Floor(3855487 / patch.size)
 Loop, %loopCount% {
     emptyBeginAddr += patch.size
     ReadProcessMemoryToBuffer(localTempBuffer, hProcess, emptyBeginAddr, patch.size)
